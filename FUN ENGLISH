@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#8b5cf6" />
+<title>ABC Fun — Apprends l'anglais en jouant !</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  * { -webkit-tap-highlight-color: transparent; }
+  html, body { touch-action: manipulation; }
+  body {
+    font-family: 'Baloo 2', ui-rounded, system-ui, sans-serif;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    overflow-x: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  @keyframes float { 0%,100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-18px) rotate(6deg); } }
+  @keyframes pop { 0% { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.12); } 100% { transform: scale(1); opacity: 1; } }
+  @keyframes shake { 0%,100% { transform: translateX(0); } 20%,60% { transform: translateX(-9px); } 40%,80% { transform: translateX(9px); } }
+  @keyframes bounceSlow { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-14px); } }
+  @keyframes wiggle { 0%,100% { transform: rotate(-6deg) scale(1); } 50% { transform: rotate(6deg) scale(1.08); } }
+  @keyframes starPop { 0% { transform: scale(0) rotate(-160deg); opacity: 0; } 70% { transform: scale(1.35) rotate(12deg); opacity: 1; } 100% { transform: scale(1) rotate(0); } }
+  .animate-float { animation: float 5s ease-in-out infinite; }
+  .animate-pop { animation: pop .45s cubic-bezier(.34,1.56,.64,1) both; }
+  .animate-shake { animation: shake .45s both; }
+  .animate-bounce-slow { animation: bounceSlow 1.8s ease-in-out infinite; }
+  .animate-wiggle { animation: wiggle 1.6s ease-in-out infinite; display: inline-block; }
+  .star-filled { animation: starPop .55s cubic-bezier(.34,1.56,.64,1) both; }
+  .opt-btn {
+    background: #fff; border: none; border-radius: 1.5rem; font-weight: 800;
+    padding: 1rem .5rem; color: #4338ca; cursor: pointer;
+    box-shadow: 0 6px 0 rgba(0,0,0,.18);
+    transition: transform .08s, box-shadow .08s, background .2s;
+    font-family: inherit;
+  }
+  .opt-btn:active { transform: translateY(5px); box-shadow: 0 1px 0 rgba(0,0,0,.18); }
+  .opt-btn.correct { background: #4ade80 !important; color: #fff !important; animation: pop .4s; }
+  .opt-btn.wrong { background: #f87171 !important; color: #fff !important; animation: shake .4s; opacity: .45; }
+  .opt-btn:disabled { cursor: default; }
+  .slot {
+    min-width: 3.6rem; min-height: 3.4rem; padding: .4rem .7rem;
+    border: 3px dashed rgba(255,255,255,.65); border-radius: 1rem;
+    background: rgba(255,255,255,.14); color: #fff; font-weight: 800; font-size: 1.15rem;
+    cursor: pointer; transition: background .2s; font-family: inherit;
+  }
+  .slot.filled { background: #fbbf24; border-style: solid; border-color: #fbbf24; color: #78350f; animation: pop .3s; }
+  .slot.slot-correct { background: #4ade80 !important; border-color: #4ade80 !important; color: #fff !important; }
+  .word-card {
+    background: #fff; border: none; border-radius: 1rem; padding: .6rem 1.1rem;
+    font-weight: 800; font-size: 1.15rem; color: #4338ca; cursor: pointer;
+    box-shadow: 0 5px 0 rgba(0,0,0,.18); transition: transform .08s, box-shadow .08s; font-family: inherit;
+  }
+  .word-card:active { transform: translateY(4px); box-shadow: 0 1px 0 rgba(0,0,0,.18); }
+  .mode-card { border: none; cursor: pointer; font-family: inherit; }
+  #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
+</style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+<div id="bg-floaties" class="fixed inset-0 pointer-events-none overflow-hidden z-0"></div>
+<div id="app" class="relative z-10"></div>
+
+<script>
+// ==================== DATA ====================
+const LETTER_WORDS = {
+  A:{word:'apple',emoji:'🍎'},B:{word:'ball',emoji:'⚽'},C:{word:'cat',emoji:'🐱'},
+  D:{word:'dog',emoji:'🐶'},E:{word:'egg',emoji:'🥚'},F:{word:'fish',emoji:'🐟'},
+  G:{word:'grapes',emoji:'🍇'},H:{word:'hat',emoji:'🎩'},I:{word:'ice cream',emoji:'🍦'},
+  J:{word:'juice',emoji:'🧃'},K:{word:'kite',emoji:'🪁'},L:{word:'lion',emoji:'🦁'},
+  M:{word:'moon',emoji:'🌙'},N:{word:'nose',emoji:'👃'},O:{word:'orange',emoji:'🍊'},
+  P:{word:'pizza',emoji:'🍕'},Q:{word:'queen',emoji:'👑'},R:{word:'rainbow',emoji:'🌈'},
+  S:{word:'sun',emoji:'☀️'},T:{word:'tree',emoji:'🌳'},U:{word:'umbrella',emoji:'☂️'},
+  V:{word:'violin',emoji:'🎻'},W:{word:'whale',emoji:'🐋'},Y:{word:'yoyo',emoji:'🪀'},
+  Z:{word:'zebra',emoji:'🦓'}
+};
+const ALPHABET = Object.keys(LETTER_WORDS).map(letter => ({ letter, ...LETTER_WORDS[letter] }));
+
+const NOUNS = [
+  {word:'cat',emoji:'🐱',fr:'chat'},{word:'dog',emoji:'🐶',fr:'chien'},
+  {word:'bird',emoji:'🐦',fr:'oiseau'},{word:'fish',emoji:'🐟',fr:'poisson'},
+  {word:'lion',emoji:'🦁',fr:'lion'},{word:'apple',emoji:'🍎',fr:'pomme'},
+  {word:'banana',emoji:'🍌',fr:'banane'},{word:'grapes',emoji:'🍇',fr:'raisin'},
+  {word:'milk',emoji:'🥛',fr:'lait'},{word:'bread',emoji:'🍞',fr:'pain'},
+  {word:'sun',emoji:'☀️',fr:'soleil'},{word:'moon',emoji:'🌙',fr:'lune'},
+  {word:'star',emoji:'⭐',fr:'étoile'},{word:'tree',emoji:'🌳',fr:'arbre'},
+  {word:'flower',emoji:'🌸',fr:'fleur'},{word:'house',emoji:'🏠',fr:'maison'},
+  {word:'car',emoji:'🚗',fr:'voiture'},{word:'ball',emoji:'⚽',fr:'ballon'},
+  {word:'book',emoji:'📖',fr:'livre'},{word:'hat',emoji:'🎩',fr:'chapeau'}
+];
+
+const VERBS = [
+  {word:'run',emoji:'🏃',fr:'courir'},{word:'jump',emoji:'🤸',fr:'sauter'},
+  {word:'eat',emoji:'😋',fr:'manger'},{word:'sleep',emoji:'😴',fr:'dormir'},
+  {word:'swim',emoji:'🏊',fr:'nager'},{word:'sing',emoji:'🎤',fr:'chanter'},
+  {word:'dance',emoji:'💃',fr:'danser'},{word:'fly',emoji:'🦋',fr:'voler'},
+  {word:'read',emoji:'📚',fr:'lire'},{word:'draw',emoji:'✏️',fr:'dessiner'},
+  {word:'walk',emoji:'🚶',fr:'marcher'},{word:'play',emoji:'🎮',fr:'jouer'}
+];
+
+const SENTENCES = [
+  {words:['The','cat','is','black'],emoji:'🐱⬛',fr:'Le chat est noir'},
+  {words:['I','like','apples'],emoji:'😋🍎',fr:"J'aime les pommes"},
+  {words:['The','dog','runs','fast'],emoji:'🐶💨',fr:'Le chien court vite'},
+  {words:['She','is','happy'],emoji:'👧😊',fr:'Elle est contente'},
+  {words:['The','bird','can','fly'],emoji:'🐦🌈',fr:"L'oiseau peut voler"},
+  {words:['He','eats','a','banana'],emoji:'👦🍌',fr:'Il mange une banane'},
+  {words:['The','sun','is','hot'],emoji:'☀️🔥',fr:'Le soleil est chaud'},
+  {words:['We','play','with','a','ball'],emoji:'🧒⚽',fr:'On joue avec un ballon'},
+  {words:['The','fish','swims','fast'],emoji:'🐟💦',fr:'Le poisson nage vite'},
+  {words:['I','see','a','star'],emoji:'👀⭐',fr:'Je vois une étoile'}
+];
+
+const MODES = {
+  alphabet:{title:"L'Alphabet",emoji:'🔤',desc:'Les lettres de A à Z',instruction:'Écoute bien et trouve la bonne lettre ! 🎧'},
+  words:{title:'Les Mots',emoji:'🐱',desc:'Nomme les images !',instruction:'Écoute et trouve le mot qui correspond ! 🎧'},
+  verbs:{title:'Les Verbes',emoji:'🏃',desc:'Reconnais les actions !',instruction:'Écoute et trouve le verbe action ! 🎧'},
+  sentences:{title:'Les Phrases',emoji:'🧩',desc:'Construis des phrases !',instruction:'Écoute puis touche les mots dans le bon ordre ! 👇'}
+};
+
+// ==================== STATE ====================
+const state = {
+  screen:'home', mode:null, questions:[], qIndex:0,
+  score:0, streak:0, locked:false,
+  placed:[], wordOrder:[], sentenceAttempts:0,
+  soundOn:true, totalStars:0
+};
+
+const app = document.getElementById('app');
+
+// ==================== HELPERS ====================
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+// ==================== AUDIO (Web Audio API) ====================
+let audioCtx=null;
+function getCtx(){
+  if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+  return audioCtx;
+}
+function playTone(freq,dur,type,vol,when){
+  const ctx=getCtx(); if(!ctx) return;
+  type=type||'sine'; vol=vol||0.2; when=when||0;
+  const t=ctx.currentTime+when;
+  const o=ctx.createOscillator(), g=ctx.createGain();
+  o.type=type; o.frequency.setValueAtTime(freq,t);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.linearRampToValueAtTime(vol,t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(ctx.destination);
+  o.start(t); o.stop(t+dur+0.05);
+}
+function sfxClick(){ playTone(700,0.08,'sine',0.15); }
+function sfxCorrect(){ playTone(523.25,0.14,'sine',0.25,0); playTone(659.25,0.14,'sine',0.25,0.1); playTone(783.99,0.28,'sine',0.25,0.2); }
+function sfxWrong(){ playTone(280,0.18,'triangle',0.14,0); playTone(200,0.3,'triangle',0.14,0.14); }
+function sfxFanfare(){ [523.25,659.25,783.99,1046.5,783.99,1046.5,1318.5].forEach((f,i)=>playTone(f,0.22,'triangle',0.2,i*0.12)); }
+
+// ==================== SPEECH ====================
+let englishVoice=null;
+function pickVoice(){
+  if(!window.speechSynthesis) return;
+  const voices=speechSynthesis.getVoices();
+  englishVoice=voices.find(v=>v.lang==='en-US')||voices.find(v=>v.lang&&v.lang.startsWith('en'))||null;
+}
+if(window.speechSynthesis){ pickVoice(); speechSynthesis.onvoiceschanged=pickVoice; }
+
+function speak(text,rate){
+  if(!state.soundOn||!window.speechSynthesis) return;
+  rate=rate||0.85;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang='en-US'; u.rate=rate; u.pitch=1.05;
+  if(englishVoice) u.voice=englishVoice;
+  speechSynthesis.speak(u);
+}
+function speakCurrent(){
+  const q=state.questions[state.qIndex];
+  if(!q||state.mode==='sentences') return;
+  if(state.mode==='alphabet'){
+    const L=q.item, lw=LETTER_WORDS[L.letter];
+    speak(L.letter+'! '+L.letter+' is for '+lw.word+'!',0.85);
+  } else if(q.item){
+    speak(q.item.word,0.85);
+  }
+}
+function replayAudio(){
+  sfxClick();
+  setTimeout(()=>{
+    if(state.mode==='sentences') speak(state.questions[state.qIndex].words.join(' '),0.8);
+    else speakCurrent();
+  },120);
+}
+
+// ==================== CONFETTI ====================
+const confettiCanvas=document.getElementById('confetti');
+const cctx=confettiCanvas.getContext('2d');
+let confettiPieces=[], confettiRunning=false;
+function resizeCanvas(){ confettiCanvas.width=window.innerWidth; confettiCanvas.height=window.innerHeight; }
+window.addEventListener('resize',resizeCanvas); resizeCanvas();
+function launchConfetti(count){
+  count=count||120;
+  const colors=['#f43f5e','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ec4899','#facc15'];
+  for(let i=0;i<count;i++){
+    confettiPieces.push({
+      x:Math.random()*confettiCanvas.width, y:-20-Math.random()*120,
+      w:6+Math.random()*8, h:8+Math.random()*10,
+      color:colors[Math.floor(Math.random()*colors.length)],
+      vy:2+Math.random()*3.5, vx:-1.5+Math.random()*3,
+      rot:Math.random()*Math.PI*2, vr:-0.12+Math.random()*0.24,
+      circle:Math.random()<0.4
+    });
+  }
+  if(!confettiRunning){ confettiRunning=true; requestAnimationFrame(confettiLoop); }
+}
+function confettiLoop(){
+  cctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height);
+  confettiPieces=confettiPieces.filter(p=>p.y<confettiCanvas.height+40);
+  for(const p of confettiPieces){
+    p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr;
+    cctx.save(); cctx.translate(p.x,p.y); cctx.rotate(p.rot);
+    cctx.fillStyle=p.color;
+    if(p.circle){ cctx.beginPath(); cctx.arc(0,0,p.w/2,0,Math.PI*2); cctx.fill(); }
+    else cctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+    cctx.restore();
+  }
+  if(confettiPieces.length>0) requestAnimationFrame(confettiLoop);
+  else { confettiRunning=false; cctx.clearRect(0,0,confettiCanvas.width,confettiCanvas.height); }
+}
+
+// ==================== BACKGROUND FLOATIES ====================
+function renderFloaties(){
+  const emojis=['☁️','🎈','⭐','🌈','☁️','🎵','🦋','☁️'];
+  document.getElementById('bg-floaties').innerHTML=emojis.map((e,i)=>{
+    const left=(i*13+4)%95, top=(i*23+8)%85, delay=(i*0.7)%4, dur=5+(i%3)*1.5;
+    return `<span class="absolute text-4xl opacity-25" style="left:${left}%;top:${top}%;animation:float ${dur}s ease-in-out ${delay}s infinite">${e}</span>`;
+  }).join('');
+}
+
+// ==================== SHARED UI ====================
+function headerHTML(title){
+  return `
+  <div class="flex items-center justify-between mb-3 gap-2">
+    <button onclick="goHome()" class="bg-white/20 hover:bg-white/30 text-white rounded-2xl w-12 h-12 text-2xl backdrop-blur transition">🏠</button>
+    <div class="text-white font-extrabold text-lg md:text-xl drop-shadow text-center">${title}</div>
+    <div class="flex items-center gap-2">
+      <div id="score-chip" class="bg-white/20 rounded-2xl px-3 h-12 flex items-center text-yellow-300 font-extrabold text-lg backdrop-blur">⭐ ${state.score}</div>
+      <button onclick="toggleSound()" class="bg-white/20 hover:bg-white/30 text-white rounded-2xl w-12 h-12 text-2xl backdrop-blur transition">${state.soundOn?'🔊':'🔇'}</button>
+    </div>
+  </div>`;
+}
+function progressHTML(){
+  const pct=(state.qIndex/state.questions.length)*100;
+  return `
+  <div class="w-full bg-white/25 rounded-full h-3 mb-2 overflow-hidden">
+    <div class="bg-yellow-300 h-3 rounded-full transition-all duration-500" style="width:${pct}%"></div>
+  </div>
+  <div class="text-white/90 font-bold text-sm mb-1 text-center">Question ${state.qIndex+1} / ${state.questions.length}</div>`;
+}
+function streakHTML(){
+  return state.streak>=2 ? `<span class="inline-block bg-orange-500 text-white font-extrabold rounded-full px-4 py-1 animate-pop">🔥 ${state.streak} d'affilée !</span>` : '';
+}
+function updateStreak(){
+  const el=document.getElementById('streak');
+  if(el) el.innerHTML=streakHTML();
+}
+function showFeedback(correct,extra){
+  const el=document.getElementById('feedback');
+  if(!el) return;
+  extra=extra||'';
+  if(correct){
+    const msgs=['Bravo ! 🎉','Super ! ⭐','Génial ! 🌟','Magnifique ! 🏆','Incroyable ! 🚀','Bravo ! 🎈'];
+    el.innerHTML=`<div class="bg-green-400 text-white font-extrabold text-2xl rounded-3xl px-6 py-2 shadow-xl animate-pop">${msgs[Math.floor(Math.random()*msgs.length)]}${extra}</div>`;
+  } else {
+    el.innerHTML=`<div class="bg-white text-orange-500 font-extrabold text-xl rounded-3xl px-6 py-2 shadow-xl animate-shake">Réessaie ! 💪</div>`;
+  }
+}
+function updateScoreChip(){
+  const el=document.getElementById('score-chip');
+  if(el) el.textContent='⭐ '+state.score;
+}
+
+// ==================== HOME ====================
+function renderHome(){
+  state.screen='home';
+  if(window.speechSynthesis) speechSynthesis.cancel();
+  const colors=['#facc15','#4ade80','#60a5fa','#f472b6','#fb923c','#a78bfa'];
+  const title='ABC FUN'.split('').map((c,i)=>
+    c===' ' ? '<span class="inline-block">&nbsp;</span>'
+    : `<span class="animate-wiggle" style="animation-delay:${i*0.12}s;color:${colors[i%colors.length]}">${c}</span>`
+  ).join('');
+  const cards=Object.entries(MODES).map(([key,m])=>`
+    <button onclick="startMode('${key}')" class="mode-card bg-white rounded-3xl p-5 shadow-2xl flex flex-col items-center gap-1 transition-transform duration-150 hover:scale-105 active:scale-95">
+      <div class="text-6xl animate-float">${m.emoji}</div>
+      <div class="text-2xl font-extrabold text-gray-800">${m.title}</div>
+      <div class="text-sm text-gray-500 font-bold">${m.desc}</div>
+    </button>`).join('');
+  app.innerHTML=`
+    <div class="min-h-screen flex flex-col items-center justify-center px-4 py-8 max-w-3xl mx-auto">
+      <div class="text-5xl mb-1 animate-float">🎈</div>
+      <h1 class="text-5xl md:text-7xl font-extrabold drop-shadow-lg mb-2 text-center">${title}</h1>
+      <p class="text-white text-xl md:text-2xl font-bold mb-2 text-center drop-shadow">Apprends l'anglais en t'amusant ! 🎉</p>
+      ${state.totalStars>0
+        ? `<p class="text-yellow-300 text-lg font-extrabold mb-4">⭐ ${state.totalStars} étoiles gagnées</p>`
+        : `<p class="text-white/70 text-base font-bold mb-4">Choisis un jeu pour commencer !</p>`}
+      <div class="grid grid-cols-2 gap-4 w-full">${cards}</div>
+      <p class="text-white/60 text-sm font-bold mt-6 text-center">🔊 Active le son pour entendre les mots en anglais !</p>
+    </div>`;
+}
+
+// ==================== GAME FLOW ====================
+function startMode(mode){
+  getCtx(); sfxClick();
+  state.mode=mode; state.screen='quiz';
+  state.qIndex=0; state.score=0; state.streak=0; state.locked=false;
+  if(mode==='sentences'){
+    state.questions=shuffle(SENTENCES).slice(0,8);
+  } else if(mode==='alphabet'){
+    const picked=shuffle(ALPHABET).slice(0,8);
+    state.questions=picked.map(item=>{
+      const caseType=Math.random()<0.5?'upper':'lower';
+      const distractors=shuffle(ALPHABET.filter(p=>p.letter!==item.letter)).slice(0,3);
+      return { item, caseType, attempts:0, options:shuffle([item,...distractors]) };
+    });
+  } else {
+    const pool=mode==='words'?NOUNS:VERBS;
+    const picked=shuffle(pool).slice(0,8);
+    state.questions=picked.map(item=>{
+      const distractors=shuffle(pool.filter(p=>p.word!==item.word)).slice(0,3);
+      return { item, attempts:0, options:shuffle([item,...distractors]) };
+    });
+  }
+  renderQuiz();
+  setTimeout(speakCurrent,500);
+}
+
+function renderQuiz(){
+  state.locked=false;
+  const m=MODES[state.mode];
+  if(state.mode==='sentences'){
+    initSentenceState();
+    renderSentenceContent(m);
+  } else {
+    renderQuizCard(m);
+  }
+}
+
+function renderQuizCard(m){
+  const q=state.questions[state.qIndex];
+  let questionArea='', replayTxt='🔊 Écouter';
+  if(state.mode==='alphabet'){
+    const lw=LETTER_WORDS[q.item.letter];
+    questionArea=`
+      <div class="bg-white rounded-3xl px-8 py-5 shadow-2xl inline-block animate-pop text-center">
+        <div class="text-7xl animate-bounce-slow">${lw.emoji}</div>
+        <div class="text-indigo-300 font-extrabold text-2xl mt-1">Quelle lettre ?</div>
+      </div>`;
+    replayTxt='🔊 Réécouter';
+  } else {
+    questionArea=`
+      <div class="bg-white rounded-3xl px-8 py-6 shadow-2xl inline-block animate-pop text-center">
+        <div class="text-8xl animate-bounce-slow">${q.item.emoji}</div>
+        <div class="text-gray-300 font-extrabold text-xl mt-1">${state.mode==='words'?'Quel est ce mot ?':'Quelle est cette action ?'}</div>
+      </div>`;
+    replayTxt=state.mode==='words'?'🔊 Écouter le mot':'🔊 Écouter le verbe';
+  }
+  const options=q.options.map((opt,i)=>{
+    const label=state.mode==='alphabet'
+      ? (q.caseType==='upper'?opt.letter:opt.letter.toLowerCase())
+      : opt.word;
+    const sizeCls=state.mode==='alphabet'?'text-6xl md:text-7xl':'text-xl md:text-2xl';
+    return `<button id="opt-${i}" onclick="answerQuiz(${i})" class="opt-btn ${sizeCls} w-full">${label}</button>`;
+  }).join('');
+  app.innerHTML=`
+    <div class="min-h-screen flex flex-col max-w-2xl mx-auto px-4 py-4">
+      ${headerHTML(m.emoji+' '+m.title)}
+      ${progressHTML()}
+      <div class="text-white/85 font-bold text-center mb-1">${m.instruction}</div>
+      <div id="streak" class="text-center h-8">${streakHTML()}</div>
+      <div class="flex-1 flex flex-col items-center justify-center gap-4 my-2">
+        ${questionArea}
+        <div id="feedback" class="h-16 flex items-center justify-center text-center"></div>
+        <div class="grid grid-cols-2 gap-3 w-full max-w-md">${options}</div>
+        <button onclick="replayAudio()" class="bg-white/25 hover:bg-white/35 text-white font-extrabold rounded-full px-6 py-2 text-lg backdrop-blur transition">${replayTxt}</button>
+      </div>
+    </div>`;
+}
+
+function answerQuiz(i){
+  if(state.locked) return;
+  const q=state.questions[state.qIndex];
+  const btn=document.getElementById('opt-'+i);
+  if(!btn||btn.disabled) return;
+  if(q.options[i]===q.item){
+    state.locked=true;
+    btn.classList.add('correct');
+    if(q.attempts===0){ state.score++; state.streak++; }
+    sfxCorrect();
+    speakCurrent();
+    updateScoreChip(); updateStreak();
+    const fr=(state.mode==='words'||state.mode==='verbs')
+      ? `<div class="text-base font-bold text-green-100">${q.item.fr} = ${q.item.word}</div>` : '';
+    showFeedback(true,fr);
+    setTimeout(nextQuestion,1700);
+  } else {
+    q.attempts++;
+    btn.classList.add('wrong');
+    btn.disabled=true;
+    state.streak=0;
+    sfxWrong();
+    showFeedback(false);
+    updateStreak();
+  }
+}
+
+function nextQuestion(){
+  state.qIndex++;
+  if(state.qIndex>=state.questions.length){
+    state.totalStars+=state.score;
+    renderResults();
+  } else {
+    renderQuiz();
+    setTimeout(speakCurrent,450);
+  }
+}
+
+// ==================== SENTENCES ====================
+function initSentenceState(){
+  const s=state.questions[state.qIndex];
+  state.placed=s.words.map(()=>null);
+  state.wordOrder=shuffle(s.words.map((_,i)=>i));
+  state.sentenceAttempts=0;
+}
+
+function renderSentenceContent(m){
+  const s=state.questions[state.qIndex];
+  const slots=s.words.map((w,i)=>{
+    const p=state.placed[i];
+    return `<button id="slot-${i}" onclick="tapSlot(${i})" class="slot ${p!==null?'filled':''}">${p!==null?s.words[p]:''}</button>`;
+  }).join('');
+  const bank=state.wordOrder.filter(idx=>!state.placed.includes(idx)).map(idx=>
+    `<button onclick="tapWord(${idx})" class="word-card">${s.words[idx]}</button>`
+  ).join('');
+  app.innerHTML=`
+    <div class="min-h-screen flex flex-col max-w-2xl mx-auto px-4 py-4">
+      ${headerHTML(m.emoji+' '+m.title)}
+      ${progressHTML()}
+      <div class="text-white/85 font-bold text-center mb-1">${m.instruction}</div>
+      <div class="flex-1 flex flex-col items-center justify-center gap-4 my-2">
+        <div class="bg-white rounded-3xl p-5 shadow-2xl text-center animate-pop">
+          <div class="text-6xl md:text-7xl">${s.emoji}</div>
+          <button onclick="replayAudio()" class="mt-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold rounded-full px-4 py-1 text-sm transition">🔊 Écouter la phrase</button>
+        </div>
+        <div id="feedback" class="h-16 flex items-center justify-center text-center"></div>
+        <div class="flex flex-wrap justify-center gap-2 max-w-md">${slots}</div>
+        <div class="text-white/80 font-bold text-sm">👇 Touche les mots dans le bon ordre</div>
+        <div class="flex flex-wrap justify-center gap-2 max-w-md">${bank}</div>
+      </div>
+    </div>`;
+}
+
+function tapWord(idx){
+  if(state.locked) return;
+  const empty=state.placed.findIndex(p=>p===null);
+  if(empty===-1) return;
+  state.placed[empty]=idx;
+  sfxClick();
+  renderSentenceContent(MODES[state.mode]);
+  if(!state.placed.some(p=>p===null)) checkSentence();
+}
+function tapSlot(i){
+  if(state.locked||state.placed[i]===null) return;
+  state.placed[i]=null;
+  sfxClick();
+  renderSentenceContent(MODES[state.mode]);
+}
+function checkSentence(){
+  const s=state.questions[state.qIndex];
+  const correct=state.placed.every((p,i)=>p===i);
+  if(correct){
+    state.locked=true;
+    if(state.sentenceAttempts===0) state.score++;
+    updateScoreChip();
+    document.querySelectorAll('.slot').forEach(el=>el.classList.add('slot-correct'));
+    sfxFanfare();
+    speak(s.words.join(' '),0.8);
+    launchConfetti(90);
+    showFeedback(true,`<div class="text-base font-bold text-green-100">${s.fr}</div>`);
+    setTimeout(nextQuestion,2600);
+  } else {
+    state.sentenceAttempts++;
+    state.streak=0;
+    sfxWrong();
+    showFeedback(false);
+    setTimeout(()=>{
+      state.placed=state.placed.map(()=>null);
+      state.locked=false;
+      renderSentenceContent(MODES[state.mode]);
+    },1300);
+  }
+}
+
+// ==================== RESULTS ====================
+function renderResults(){
+  state.screen='results';
+  if(window.speechSynthesis) speechSynthesis.cancel();
+  const total=state.questions.length;
+  const ratio=state.score/total;
+  const stars=ratio>=0.85?3:ratio>=0.5?2:1;
+  const msgs={
+    3:['Incroyable ! Tu es un vrai champion ! 🏆','Parfait ! Tu as tout compris ! 🌟'],
+    2:['Bravo ! Tu progresses super vite ! 🚀','Excellent travail ! 🎉'],
+    1:["Bien joué ! Continue à t'entraîner ! 💪",'Pas mal ! Réessaie pour faire encore mieux ! 🌈']
+  };
+  const msg=msgs[stars][Math.floor(Math.random()*msgs[stars].length)];
+  const starHTML=[1,2,3].map(i=>
+    `<span class="inline-block text-6xl md:text-7xl ${i<=stars?'star-filled':''} ${i>stars?'opacity-30 grayscale':''}" style="animation-delay:${0.4+i*0.3}s">⭐</span>`
+  ).join('');
+  app.innerHTML=`
+    <div class="min-h-screen flex flex-col items-center justify-center px-4 max-w-lg mx-auto text-center">
+      <div class="text-6xl mb-2 animate-bounce-slow">🎉</div>
+      <h2 class="text-5xl font-extrabold text-white drop-shadow-lg mb-3">Bravo !</h2>
+      <div class="mb-4 flex justify-center gap-2">${starHTML}</div>
+      <p class="text-white text-2xl font-bold mb-1">${msg}</p>
+      <p class="text-white/85 text-xl font-bold mb-8">${state.score} bonne${state.score>1?'s':''} réponse${state.score>1?'s':''} sur ${total} ${MODES[state.mode].emoji}</p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center w-full">
+        <button onclick="startMode('${state.mode}')" class="bg-yellow-400 hover:bg-yellow-300 text-yellow-900 font-extrabold text-xl rounded-3xl px-8 py-4 shadow-2xl transition-transform hover:scale-105 active:scale-95">🔁 Rejouer</button>
+        <button onclick="goHome()" class="bg-white text-indigo-600 font-extrabold text-xl rounded-3xl px-8 py-4 shadow-2xl transition-transform hover:scale-105 active:scale-95">🏠 Menu</button>
+      </div>
+    </div>`;
+  sfxFanfare();
+  speak('Great job!',0.9);
+  launchConfetti(140);
+  setTimeout(()=>launchConfetti(70),700);
+}
+
+// ==================== NAV / SOUND ====================
+function goHome(){
+  sfxClick();
+  if(window.speechSynthesis) speechSynthesis.cancel();
+  renderHome();
+}
+function toggleSound(){
+  state.soundOn=!state.soundOn;
+  if(!state.soundOn && window.speechSynthesis) speechSynthesis.cancel();
+  else sfxClick();
+  if(state.screen==='home') renderHome();
+  else if(state.screen==='results') renderResults();
+  else renderQuiz();
+}
+
+// ==================== INIT ====================
+document.addEventListener('pointerdown',()=>getCtx(),{once:true});
+renderFloaties();
+renderHome();
+</script>
+</body>
+</html>
